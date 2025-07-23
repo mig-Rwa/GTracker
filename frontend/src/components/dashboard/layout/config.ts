@@ -7,6 +7,7 @@ export const navItems = [
   { key: 'exercise-library', title: 'Exercise Library', href: '/exercise-library', icon: 'book-open' },
   { key: 'nutrition', title: 'Nutrition', href: '/nutrition', icon: 'apple-logo' },
   { key: 'progress', title: 'Progress', href: '/progress', icon: 'chart-line-up' },
+  { key: 'subscriptions', title: 'Subscriptions', href: '/subscriptions', icon: 'plugs-connected' },
   { key: 'account', title: 'Account', href: paths.dashboard.account, icon: 'user' },
   { key: 'bmi-calculator', title: 'BMI Calculator', href: '/bmi-calculator', icon: 'scale' },
   { key: 'body-fat-calculator', title: 'Body Fat Calculator', href: '/body-fat-calculator', icon: 'user-circle' },
