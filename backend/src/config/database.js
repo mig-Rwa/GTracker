@@ -104,6 +104,41 @@ db.serialize(() => {
         notes TEXT,
         UNIQUE(user_id, workout_id, date)
     )`);
+
+    // Memberships table (history & current)
+    db.run(`CREATE TABLE IF NOT EXISTS memberships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        plan_key TEXT NOT NULL,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        status TEXT NOT NULL DEFAULT 'active', -- 'active', 'canceled', 'expired'
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
+
+    // Membership plans table (dynamic plans)
+    db.run(`CREATE TABLE IF NOT EXISTS membership_plans (
+        plan_key TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        price INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'TRY',
+        features TEXT,
+        stripe_price_id TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1
+    )`);
+    // To initially populate plans, use an INSERT statement in a migration or admin endpoint.
+
+    // Bookings table
+    db.run(`CREATE TABLE IF NOT EXISTS bookings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        facility TEXT NOT NULL,
+        hours INTEGER NOT NULL,
+        booking_date TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )`);
 });
 
 module.exports = db; 

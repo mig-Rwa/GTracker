@@ -1,0 +1,725 @@
+'use client';
+
+import * as React from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+// MUI Components
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  CardActions,
+  Button,
+  Grid,
+  Stack,
+  Divider,
+  Paper,
+  IconButton,
+  Avatar,
+  Tooltip,
+  Snackbar,
+  Alert,
+  Select,
+  MenuItem,
+  Chip,
+  CircularProgress,
+  Container
+} from '@mui/material';
+
+// Icons
+import {
+  Pool as PoolIcon,
+  SportsSoccer as SportsSoccerIcon,
+  FitnessCenter as FitnessCenterIcon,
+  CheckCircleOutline as CheckCircleOutlineIcon,
+  EventAvailable as CalendarTodayIcon,
+} from '@mui/icons-material';
+
+// Custom Components
+import { useUser } from '@/hooks/use-user';
+
+// Type definitions
+interface Membership {
+  id: string;
+  user_id: string;
+  plan_key: string;
+  plan_type: string;
+  start_date: string;
+  end_date: string;
+  status: 'active' | 'expired' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  days_remaining?: number;
+}
+
+interface Booking {
+  id: number | string;
+  facility: string;
+  hours: number;
+  booking_date: string;
+  status: 'confirmed' | 'cancelled' | 'completed';
+  created_at: string;
+  updated_at: string;
+}
+
+interface MembershipPlan {
+  id: string;
+  plan_key: string;
+  label: string;
+  price: number;
+  currency: string;
+  duration_days: number;
+  features: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+interface Facility {
+  key: string;
+  title: string;
+  desc: string;
+  icon: React.ReactNode;
+}
+
+interface SnackbarState {
+  open: boolean;
+  message: string;
+  severity: 'success' | 'error' | 'info' | 'warning';
+}
+
+interface BookingData {
+  facility: string;
+  date: string;
+  hours: number;
+}
+
+const hourPrices: Record<number, number> = {
+  1: 100,
+  2: 180,
+  3: 250,
+};
+
+// Facilities data
+const facilities: Facility[] = [
+  {
+    key: 'gym',
+    title: 'Gym',
+    desc: 'Fully equipped gym with modern equipment',
+    icon: <FitnessCenterIcon />,
+  },
+  {
+    key: 'pool',
+    title: 'Swimming Pool',
+    desc: 'Olympic size swimming pool',
+    icon: <PoolIcon />,
+  },
+  {
+    key: 'squash',
+    title: 'Squash Court',
+    desc: 'Professional squash courts',
+    icon: <SportsSoccerIcon />,
+  },
+];
+
+export default function SubscriptionsPage() {
+  const router = useRouter();
+  const { user, loading: userLoading } = useUser();
+  
+  // State
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [membershipPlans, setMembershipPlans] = useState<MembershipPlan[]>([]);
+  const [currentMembership, setCurrentMembership] = useState<Membership | null>(null);
+  const [membershipHistory, setMembershipHistory] = useState<Membership[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingDropdown, setBookingDropdown] = useState<string | null>(null);
+  const [bookingHours, setBookingHours] = useState<Record<string, number>>({});
+  const [actionLoading, setActionLoading] = useState<boolean>(false);
+  const [plansLoading, setPlansLoading] = useState<boolean>(true);
+  const [bookingsLoading, setBookingsLoading] = useState<boolean>(true);
+  const [snackbar, setSnackbar] = useState<SnackbarState>({
+    open: false,
+    message: '',
+    severity: 'info',
+  });
+  
+  const [bookingData, setBookingData] = useState<BookingData>({
+    facility: '',
+    date: new Date().toISOString().split('T')[0],
+    hours: 1,
+  });
+  
+  const [bookingLoading, setBookingLoading] = useState<boolean>(false);
+  const [hasActiveMembership, setHasActiveMembership] = useState<boolean>(false);
+
+  // Initialize booking hours
+  useEffect(() => {
+    const initialBookingHours = facilities.reduce((acc, facility) => {
+      acc[facility.key] = 1;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    setBookingHours(initialBookingHours);
+  }, []);
+  
+  // Fetch membership plans
+  useEffect(() => {
+    const fetchMembershipPlans = async () => {
+      try {
+        setPlansLoading(true);
+        const response = await fetch('/api/membership-plans');
+        const data = await response.json();
+        
+        if (response.ok) {
+          setMembershipPlans(data);
+          if (data.length > 0) {
+            setSelectedPlan(data[0].plan_key);
+          }
+        } else {
+          throw new Error(data.message || 'Failed to fetch membership plans');
+        }
+      } catch (error) {
+        console.error('Error fetching membership plans:', error);
+        setSnackbar({
+          open: true,
+          message: 'Failed to load membership plans. Please try again later.',
+          severity: 'error',
+        });
+      } finally {
+        setPlansLoading(false);
+      }
+    };
+    
+    fetchMembershipPlans();
+  }, []);
+  
+  // Fetch user memberships
+  useEffect(() => {
+    const fetchUserMemberships = async () => {
+      if (!user) return;
+      
+      try {
+        const response = await fetch('/api/memberships');
+        const data = await response.json();
+        
+        if (response.ok) {
+          setCurrentMembership(data.current || null);
+          setMembershipHistory(data.history || []);
+          setHasActiveMembership(!!data.current);
+        } else {
+          throw new Error(data.message || 'Failed to fetch memberships');
+        }
+      } catch (error) {
+        console.error('Error fetching memberships:', error);
+        setSnackbar({
+          open: true,
+          message: 'Failed to load memberships. Please try again later.',
+          severity: 'error',
+        });
+      }
+    };
+    
+    fetchUserMemberships();
+  }, [user]);
+  
+  // Fetch user bookings
+  useEffect(() => {
+    const fetchUserBookings = async () => {
+      if (!user) return;
+      
+      try {
+        setBookingsLoading(true);
+        const response = await fetch('/api/bookings');
+        const data = await response.json();
+        
+        if (response.ok) {
+          setBookings(data);
+        } else {
+          throw new Error(data.message || 'Failed to fetch bookings');
+        }
+      } catch (error) {
+        console.error('Error fetching bookings:', error);
+        setSnackbar({
+          open: true,
+          message: 'Failed to load bookings. Please try again later.',
+          severity: 'error',
+        });
+      } finally {
+        setBookingsLoading(false);
+      }
+    };
+    
+    fetchUserBookings();
+  }, [user]);
+
+  // Handle subscription
+  const handleSubscribe = async () => {
+    if (!selectedPlan) return;
+    
+    try {
+      setActionLoading(true);
+      const response = await fetch('/api/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ plan_key: selectedPlan }),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok && data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url;
+      } else {
+        throw new Error(data.message || 'Failed to initiate subscription');
+      }
+    } catch (error) {
+      console.error('Error subscribing:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to process subscription. Please try again.',
+        severity: 'error',
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle booking
+  const handleBooking = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!bookingData.facility || !bookingData.date || !bookingData.hours) {
+      setSnackbar({
+        open: true,
+        message: 'Please fill in all booking details',
+        severity: 'warning',
+      });
+      return;
+    }
+    
+    try {
+      setBookingLoading(true);
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookingData),
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        setSnackbar({
+          open: true,
+          message: 'Booking successful!',
+          severity: 'success',
+        });
+        // Refresh bookings
+        const bookingsResponse = await fetch('/api/bookings');
+        const bookingsData = await bookingsResponse.json();
+        setBookings(bookingsData);
+      } else {
+        throw new Error(data.message || 'Failed to create booking');
+      }
+    } catch (error) {
+      console.error('Error creating booking:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to create booking. Please try again.',
+        severity: 'error',
+      });
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
+  // Handle booking hour change
+  const handleBookingHourChange = (facilityKey: string, hours: number) => {
+    setBookingHours(prev => ({
+      ...prev,
+      [facilityKey]: hours,
+    }));
+  };
+
+  // Handle apply booking
+  const handleApplyBooking = (facilityKey: string) => {
+    const selectedFacility = facilities.find(f => f.key === facilityKey);
+    if (!selectedFacility) return;
+    
+    setBookingData(prev => ({
+      ...prev,
+      facility: selectedFacility.title,
+      hours: bookingHours[facilityKey] || 1,
+    }));
+    
+    // Show booking form
+    setBookingDropdown(facilityKey);
+  };
+
+  // Close snackbar
+  const handleCloseSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, open: false }));
+  };
+
+  if (userLoading) {
+    return (
+      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  return (
+    <Box sx={{ flex: 1 }}>
+      <Grid container spacing={3}>
+        <Grid item xs={12}>
+          <Typography variant="h4" component="h1" sx={{ mb: 4, fontWeight: 'bold' }}>
+            Membership & Bookings
+          </Typography>
+          
+          {/* Membership Status */}
+          <Paper sx={{ p: 3, mb: 4 }}>
+            <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+              <Typography variant="h6" component="h2" sx={{ fontWeight: 'bold' }}>
+                Membership Status
+              </Typography>
+              {currentMembership && (
+                <Chip 
+                  label={currentMembership.status.toUpperCase()} 
+                  color={currentMembership.status === 'active' ? 'success' : 'default'}
+                  size="small"
+                />
+              )}
+            </Box>
+            
+            {currentMembership ? (
+              <Box>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body1">
+                      <strong>Plan:</strong> {currentMembership.plan_type}
+                    </Typography>
+                    <Typography variant="body1">
+                      <strong>Start Date:</strong> {new Date(currentMembership.start_date).toLocaleDateString()}
+                    </Typography>
+                    <Typography variant="body1">
+                      <strong>End Date:</strong> {new Date(currentMembership.end_date).toLocaleDateString()}
+                    </Typography>
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="body1">
+                      <strong>Days Remaining:</strong> {currentMembership.days_remaining}
+                    </Typography>
+                    <Button 
+                      variant="contained" 
+                      color="primary" 
+                      sx={{ mt: 2 }}
+                      onClick={handleSubscribe}
+                      disabled={actionLoading}
+                    >
+                      {actionLoading ? 'Processing...' : 'Renew Membership'}
+                    </Button>
+                  </Grid>
+                </Grid>
+              </Box>
+            ) : (
+              <Box textAlign="center" py={4}>
+                <Typography variant="body1" color="text.secondary" gutterBottom>
+                  You don't have an active membership
+                </Typography>
+                <Button 
+                  variant="contained" 
+                  color="primary"
+                  onClick={handleSubscribe}
+                  disabled={actionLoading || plansLoading}
+                >
+                  {actionLoading ? 'Processing...' : 'Subscribe Now'}
+                </Button>
+              </Box>
+            )}
+          </Paper>
+          
+          {/* Membership Plans */}
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h6" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
+              Membership Plans
+            </Typography>
+            
+            {plansLoading ? (
+              <Box display="flex" justifyContent="center" py={4}>
+                <CircularProgress />
+              </Box>
+            ) : (
+              <Grid container spacing={3}>
+                {membershipPlans.map((plan) => (
+                  <Grid item xs={12} md={4} key={plan.id}>
+                    <Card 
+                      variant="outlined"
+                      sx={{
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        borderColor: selectedPlan === plan.plan_key ? 'primary.main' : 'divider',
+                        borderWidth: selectedPlan === plan.plan_key ? 2 : 1,
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-4px)',
+                          boxShadow: 3,
+                        },
+                      }}
+                    >
+                      <CardContent sx={{ flexGrow: 1 }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                          <Typography variant="h6" component="div">
+                            {plan.label}
+                          </Typography>
+                          <Chip 
+                            label={
+                              plan.plan_key === '1month' ? 'Most Popular' : 
+                              plan.plan_key === '2weeks' ? 'Popular' : 'Basic'
+                            }
+                            color={
+                              plan.plan_key === '1month' ? 'primary' : 
+                              plan.plan_key === '2weeks' ? 'secondary' : 'default'
+                            }
+                            size="small"
+                            variant="outlined"
+                          />
+                        </Box>
+                        
+                        <Typography variant="h4" sx={{ mb: 2, fontWeight: 'bold' }}>
+                          ₺{(plan.price / 100).toLocaleString()}
+                          <Typography component="span" color="text.secondary">
+                            /{plan.plan_key === '1month' ? 'month' : plan.plan_key === '2weeks' ? '2 weeks' : 'week'}
+                          </Typography>
+                        </Typography>
+                        
+                        <Divider sx={{ my: 2 }} />
+                        
+                        <Box sx={{ mb: 3 }}>
+                          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                            INCLUDED FEATURES:
+                          </Typography>
+                          <Stack spacing={1}>
+                            <Box display="flex" alignItems="center">
+                              <CheckCircleOutlineIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                              <Typography variant="body2">
+                                {plan.plan_key === '1month' ? 'Unlimited access for 30 days' :
+                                 plan.plan_key === '2weeks' ? '14 days of unlimited access' :
+                                 '7 days of unlimited access'}
+                              </Typography>
+                            </Box>
+                            <Box display="flex" alignItems="center">
+                              <CheckCircleOutlineIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                              <Typography variant="body2">Access to all facilities</Typography>
+                            </Box>
+                            <Box display="flex" alignItems="center">
+                              <CheckCircleOutlineIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                              <Typography variant="body2">24/7 Gym access</Typography>
+                            </Box>
+                            {plan.plan_key !== '1week' && (
+                              <Box display="flex" alignItems="center">
+                                <CheckCircleOutlineIcon color="primary" fontSize="small" sx={{ mr: 1 }} />
+                                <Typography variant="body2">
+                                  {plan.plan_key === '1month' ? 'Free personal training session' :
+                                   '10% discount on personal training'}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Stack>
+                        </Box>
+                      </CardContent>
+                      
+                      <CardActions sx={{ p: 2, pt: 0 }}>
+                        <Button
+                          fullWidth
+                          variant={selectedPlan === plan.plan_key ? 'contained' : 'outlined'}
+                          color="primary"
+                          size="large"
+                          onClick={() => setSelectedPlan(plan.plan_key)}
+                          sx={{
+                            py: 1.5,
+                            fontWeight: 'bold',
+                            borderRadius: 2,
+                            textTransform: 'none',
+                            fontSize: '1rem',
+                          }}
+                        >
+                          {selectedPlan === plan.plan_key ? 'Selected' : 'Select Plan'}
+                        </Button>
+                      </CardActions>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+            
+            <Box sx={{ mt: 4, textAlign: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                onClick={handleSubscribe}
+                disabled={!selectedPlan || actionLoading || plansLoading}
+                startIcon={actionLoading ? <CircularProgress size={24} color="inherit" /> : null}
+                sx={{
+                  py: 1.5,
+                  px: 6,
+                  borderRadius: 2,
+                  fontWeight: 'bold',
+                  textTransform: 'none',
+                  fontSize: '1.1rem',
+                  minWidth: 250,
+                }}
+              >
+                {actionLoading ? 'Processing...' : 'Get Started'}
+              </Button>
+              
+              <Box sx={{ mt: 2 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Cancel anytime. No hidden fees.
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+          
+          {/* Court Bookings */}
+          <Box>
+            <Typography variant="h6" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
+              Book a Facility
+            </Typography>
+            
+            <Grid container spacing={3}>
+              {facilities.map((facility) => {
+                const isOpen = bookingDropdown === facility.key;
+                const hours = bookingHours[facility.key] || 1;
+                
+                return (
+                  <Grid item xs={12} md={4} key={facility.key}>
+                    <Card 
+                      variant="outlined"
+                      sx={{
+                        height: '100%',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        transition: 'all 0.2s',
+                        '&:hover': {
+                          transform: 'translateY(-4px)',
+                          boxShadow: 3,
+                        },
+                      }}
+                    >
+                      <CardContent sx={{ flexGrow: 1 }}>
+                        <Stack direction="row" spacing={2} alignItems="flex-start" mb={2}>
+                          <Box sx={{ color: 'primary.main' }}>{facility.icon}</Box>
+                          <Box>
+                            <Typography variant="subtitle1" fontWeight="bold">
+                              {facility.title}
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {facility.desc}
+                            </Typography>
+                          </Box>
+                        </Stack>
+                        
+                        <Button
+                          variant="contained"
+                          fullWidth
+                          onClick={() => setBookingDropdown(isOpen ? null : facility.key)}
+                          disabled={!hasActiveMembership}
+                          startIcon={<CalendarTodayIcon />}
+                          sx={{
+                            py: 1.2,
+                            borderRadius: 2,
+                            fontWeight: 'bold',
+                            textTransform: 'none',
+                          }}
+                        >
+                          {isOpen ? 'Close' : 'Book Now'}
+                        </Button>
+                        
+                        {!hasActiveMembership && (
+                          <Typography variant="caption" color="error" sx={{ display: 'block', mt: 1, textAlign: 'center' }}>
+                            Active membership required
+                          </Typography>
+                        )}
+                        
+                        {isOpen && (
+                          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+                            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                              Duration:
+                            </Typography>
+                            <Select
+                              value={hours}
+                              onChange={(e) => handleBookingHourChange(facility.key, Number(e.target.value))}
+                              fullWidth
+                              size="small"
+                              sx={{ mb: 2 }}
+                            >
+                              {[1, 2, 3].map((h) => (
+                                <MenuItem key={h} value={h}>
+                                  {h} hour{h > 1 ? 's' : ''}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                            
+                            <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                              <Typography variant="body1" fontWeight="medium">
+                                Price:
+                              </Typography>
+                              <Typography variant="h6" color="primary" fontWeight="bold">
+                                {hourPrices[hours]} TL
+                              </Typography>
+                            </Box>
+                            
+                            <Button 
+                              variant="contained" 
+                              color="primary" 
+                              fullWidth 
+                              onClick={() => handleApplyBooking(facility.key)}
+                              startIcon={<CheckCircleOutlineIcon />}
+                              sx={{
+                                py: 1,
+                                borderRadius: 2,
+                                fontWeight: 'bold',
+                                textTransform: 'none',
+                              }}
+                            >
+                              Confirm Booking
+                            </Button>
+                          </Box>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                );
+              })}
+            </Grid>
+          </Box>
+        </Grid>
+      </Grid>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={handleCloseSnackbar}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={handleCloseSnackbar}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
+    </Box>
+  );
+}

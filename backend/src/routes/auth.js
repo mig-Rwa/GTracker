@@ -81,11 +81,12 @@ router.post('/register', async (req, res) => {
             );
         });
     } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            message: 'Server error'
-        });
-    }
+      console.error('Exception in /register:', error);
+      res.status(500).json({
+          status: 'error',
+          message: 'Server error'
+      });
+  }
 });
 
 // Login user
@@ -96,6 +97,7 @@ router.post('/login', async (req, res) => {
         // Find user
         db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
             if (err) {
+                console.error('DB error in /login:', err); // <--- Added logging
                 return res.status(500).json({
                     status: 'error',
                     message: 'Database error'
@@ -103,6 +105,7 @@ router.post('/login', async (req, res) => {
             }
 
             if (!user) {
+                console.warn('Login failed: user not found for email', email); // <--- Added logging
                 return res.status(401).json({
                     status: 'error',
                     message: 'Invalid credentials'
@@ -110,11 +113,22 @@ router.post('/login', async (req, res) => {
             }
 
             // Check password
-            const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) {
-                return res.status(401).json({
+            console.log('User found for login:', user.email);
+            try {
+                const isMatch = await bcrypt.compare(password, user.password);
+                console.log('Password comparison result:', isMatch);
+                if (!isMatch) {
+                    console.warn('Login failed: incorrect password for', user.email);
+                    return res.status(401).json({
+                        status: 'error',
+                        message: 'Invalid credentials'
+                    });
+                }
+            } catch (bcryptError) {
+                console.error('Bcrypt error during password comparison:', bcryptError);
+                return res.status(500).json({
                     status: 'error',
-                    message: 'Invalid credentials'
+                    message: 'Password check error'
                 });
             }
 
@@ -138,11 +152,12 @@ router.post('/login', async (req, res) => {
             });
         });
     } catch (error) {
-        res.status(500).json({
-            status: 'error',
-            message: 'Server error'
-        });
-    }
+      console.error('Exception in /login:', error);
+      res.status(500).json({
+          status: 'error',
+          message: 'Server error'
+      });
+  }
 });
 
 // Get current user profile

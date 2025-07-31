@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "migrate": "node migrations/001_add_membership_end_dates.js"
   },
   "keywords": [
     "fitness",
@@ -27,7 +28,8 @@
     "morgan": "^1.10.0",
     "multer": "^2.0.1",
     "node-fetch": "^3.3.2",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "stripe": "^18.3.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"
