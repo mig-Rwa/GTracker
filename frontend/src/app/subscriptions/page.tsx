@@ -41,6 +41,12 @@ import {
 // Custom Hooks
 import { useUser } from '@/hooks/use-user';
 
+// Helper function to get auth headers
+const getAuthHeaders = (): Record<string, string> => {
+  const token = localStorage.getItem('custom-auth-token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 // Type definitions
 interface Membership {
   id: string;
@@ -222,7 +228,12 @@ export default function SubscriptionsPage() {
       if (!user) return;
       
       try {
-        const response = await fetch('/api/memberships', { credentials: 'include' });
+        const response = await fetch('/api/memberships', { 
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          }
+        });
         const data = await response.json();
         
         if (response.ok) {
@@ -256,11 +267,16 @@ export default function SubscriptionsPage() {
       
       try {
         setBookingsLoading(true);
-        const response = await fetch('/api/bookings', { credentials: 'include' });
+        const response = await fetch('/api/bookings', { 
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          }
+        });
         const data = await response.json();
         
         if (response.ok) {
-          setBookings(data);
+          setBookings(data.data || data);
         } else if (response.status === 401) {
           // User not logged in – treat as no bookings without spamming errors
           setBookings([]);
@@ -332,13 +348,14 @@ export default function SubscriptionsPage() {
     
     try {
       setBookingLoading(true);
-      const response = await fetch('/api/bookings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(bookingData),
-      });
+              const response = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify(bookingData),
+        });
       
       const data = await response.json();
       
@@ -349,9 +366,14 @@ export default function SubscriptionsPage() {
           severity: 'success',
         });
         // Refresh bookings
-        const bookingsResponse = await fetch('/api/bookings');
+        const bookingsResponse = await fetch('/api/bookings', {
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          }
+        });
         const bookingsData = await bookingsResponse.json();
-        setBookings(bookingsData);
+        setBookings(bookingsData.data || bookingsData);
       } else {
         throw new Error(data.message || 'Failed to create booking');
       }
@@ -867,11 +889,11 @@ export default function SubscriptionsPage() {
               </Box>
               
               {/* List existing bookings */}
-              {bookings.length > 0 && (
-                <Box sx={{ mt: 6 }}>
-                  <Typography variant="h6" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
-                    My Bookings
-                  </Typography>
+              <Box sx={{ mt: 6 }}>
+                <Typography variant="h6" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
+                  My Bookings
+                </Typography>
+                {bookings.length > 0 ? (
                   <Grid container spacing={2}>
                     {bookings.map((b) => (
                       <Grid item xs={12} md={4} key={b.id}>
@@ -886,8 +908,14 @@ export default function SubscriptionsPage() {
                       </Grid>
                     ))}
                   </Grid>
-                </Box>
-              )}
+                ) : (
+                  <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
+                    <Typography variant="body1" color="text.secondary">
+                      No bookings found. Book a facility above to see your bookings here.
+                    </Typography>
+                  </Paper>
+                )}
+              </Box>
             </Grid>
           </Grid>
 
