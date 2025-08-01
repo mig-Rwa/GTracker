@@ -354,7 +354,11 @@ export default function SubscriptionsPage() {
             'Content-Type': 'application/json',
             ...getAuthHeaders()
           },
-          body: JSON.stringify(bookingData),
+          body: JSON.stringify({
+            facility: bookingData.facility,
+            hours: bookingData.hours,
+            booking_date: bookingData.date,
+          }),
         });
       
       const data = await response.json();
@@ -477,19 +481,62 @@ export default function SubscriptionsPage() {
       if (response.ok && data.url) {
         window.location.href = data.url; // Redirect to Stripe Checkout
       } else {
-        throw new Error(data.error || 'Failed to create checkout session');
+        // Fallback to direct booking creation if Stripe session creation fails
+        const fallbackRes = await fetch('/api/bookings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+          },
+          body: JSON.stringify({
+            facility: facilityInfo.title,
+            hours,
+            booking_date,
+          }),
+        });
+        const fallbackData = await fallbackRes.json();
+        if (fallbackRes.ok) {
+          // Refresh bookings list
+          const bookingsRes2 = await fetch('/api/bookings', {
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders(),
+            },
+          });
+          const bookingsJson2 = await bookingsRes2.json();
+          setBookings(bookingsJson2.data || bookingsJson2);
+          setSnackbar({
+            open: true,
+            message: 'Booking created successfully!',
+            severity: 'success',
+          });
+        } else {
+          throw new Error(fallbackData.message || 'Failed to create booking');
+        }
       }
     } catch (error) {
       console.error('Stripe checkout error:', error);
       setSnackbar({
         open: true,
-        message: 'Unable to redirect to payment. Please try again.',
+        message: 'Unable to process booking. Please try again.',
         severity: 'error',
       });
     } finally {
       setActionLoading(false);
     }
   };
+
+  const now = Date.now();
+  const isBookingActive = (b: Booking) => {
+    if (b.status !== 'confirmed') return false;
+    const start = new Date(b.created_at).getTime();
+    const durationMs = b.hours * 60 * 60 * 1000;
+    const bufferMs = 60 * 1000; // 1-min grace
+    return start + durationMs + bufferMs > now;
+  };
+
+  const activeBookings = bookings.filter(isBookingActive)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 
   if (userLoading) {
     return (
@@ -560,6 +607,14 @@ export default function SubscriptionsPage() {
                         >
                           {actionLoading ? 'Processing...' : 'Renew Membership'}
                         </Button>
+                        <Button
+                          variant="outlined"
+                          color="secondary"
+                          sx={{ mt: 2, ml: 2 }}
+                          onClick={() => router.push('/memberships')}
+                        >
+                          Past Memberships
+                        </Button>
                       </Grid>
                     </Grid>
                   </Box>
@@ -575,6 +630,14 @@ export default function SubscriptionsPage() {
                       disabled={actionLoading || plansLoading}
                     >
                       {actionLoading ? 'Processing...' : 'Subscribe Now'}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      sx={{ ml: 2, mt: { xs: 2, sm: 0 } }}
+                      onClick={() => router.push('/memberships')}
+                    >
+                      Past Memberships
                     </Button>
                   </Box>
                 )}
@@ -745,7 +808,7 @@ export default function SubscriptionsPage() {
                         minWidth: 250,
                       }}
                     >
-                      {actionLoading ? 'Processing...' : 'Get Started'}
+                      {actionLoading ? 'Processing...' : 'Activate'}
                     </Button>
                     
                     <Box sx={{ mt: 2 }}>
@@ -889,32 +952,16 @@ export default function SubscriptionsPage() {
               </Box>
               
               {/* List existing bookings */}
-              <Box sx={{ mt: 6 }}>
-                <Typography variant="h6" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
+              <Box sx={{ mt: 6, textAlign: 'center' }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<CalendarTodayIcon />}
+                  onClick={() => router.push('/bookings')}
+                  sx={{ px: 4, py: 1.2, borderRadius: 2, fontWeight: 'bold', textTransform: 'none' }}
+                >
                   My Bookings
-                </Typography>
-                {bookings.length > 0 ? (
-                  <Grid container spacing={2}>
-                    {bookings.map((b) => (
-                      <Grid item xs={12} md={4} key={b.id}>
-                        <Paper variant="outlined" sx={{ p: 2 }}>
-                          <Typography variant="subtitle1" fontWeight="bold">
-                            {b.facility}
-                          </Typography>
-                          <Typography variant="body2" color="text.secondary">
-                            {b.booking_date} · {b.hours} hour{b.hours > 1 ? 's' : ''}
-                          </Typography>
-                        </Paper>
-                      </Grid>
-                    ))}
-                  </Grid>
-                ) : (
-                  <Paper variant="outlined" sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No bookings found. Book a facility above to see your bookings here.
-                    </Typography>
-                  </Paper>
-                )}
+                </Button>
               </Box>
             </Grid>
           </Grid>

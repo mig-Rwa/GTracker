@@ -9,6 +9,7 @@ export const navItems = [
   { key: 'progress', title: 'Progress', href: '/progress', icon: 'chart-line-up' },
   { key: 'subscriptions', title: 'Subscriptions', href: '/subscriptions', icon: 'plugs-connected' },
   { key: 'bookings', title: 'My Bookings', href: '/bookings', icon: 'calendar' },
+  { key: 'past-memberships', title: 'Past Memberships', href: '/memberships', icon: 'x-square' },
   { key: 'account', title: 'Account', href: paths.dashboard.account, icon: 'user' },
   { key: 'bmi-calculator', title: 'BMI Calculator', href: '/bmi-calculator', icon: 'scale' },
   { key: 'body-fat-calculator', title: 'Body Fat Calculator', href: '/body-fat-calculator', icon: 'user-circle' },

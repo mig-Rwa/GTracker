@@ -27,7 +27,13 @@ import {
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableContainer,
 } from '@mui/material';
 
 // Icons
@@ -279,6 +285,29 @@ export default function BookingsPage() {
     }
   };
 
+  const now = Date.now();
+  const isStillActive = (b: Booking) => {
+    if (b.status !== 'confirmed') return false;
+    const hours = Number(b.hours) || 1;
+    // robust timestamp from created_at or booking_date
+    let start = Date.parse(b.created_at as unknown as string);
+    if (Number.isNaN(start)) {
+      // fallback to booking_date midnight
+      start = Date.parse(b.booking_date + 'T00:00:00');
+    }
+    const durationMs = hours * 60 * 60 * 1000;
+    const bufferMs = 60 * 1000; // 1-min grace
+    return start + durationMs + bufferMs > now;
+  };
+
+  const activeBookings = bookings.filter(isStillActive)
+    .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+  const pastBookings = bookings.filter(b => !isStillActive(b))
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+  const sortedBookings = [...bookings].sort((a,b)=> new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
   if (userLoading) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="400px">
@@ -337,44 +366,34 @@ export default function BookingsPage() {
             </CardContent>
           </Card>
         ) : (
-          <Grid container spacing={3}>
-            {bookings.map((booking) => (
-              <Grid item xs={12} md={6} lg={4} key={booking.id}>
-                <Card sx={{ height: '100%' }}>
-                  <CardContent>
-                    <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
-                      {getFacilityIcon(booking.facility)}
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography variant="h6" component="h3" fontWeight="bold">
-                          {booking.facility}
-                        </Typography>
-                        <Chip
-                          label={booking.status}
-                          color={getStatusColor(booking.status) as any}
-                          size="small"
-                          sx={{ mt: 0.5 }}
-                        />
-                      </Box>
-                    </Stack>
-                    
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      <strong>Date:</strong> {new Date(booking.booking_date).toLocaleDateString()}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                      <strong>Duration:</strong> {booking.hours} hour{booking.hours > 1 ? 's' : ''}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                      <strong>Booked on:</strong> {new Date(booking.created_at).toLocaleDateString()}
-                    </Typography>
-                    
-                    <Stack direction="row" spacing={1}>
-                      <IconButton
-                        size="small"
-                        onClick={() => handleEditBooking(booking)}
-                        disabled={booking.status === 'cancelled' || booking.status === 'completed'}
-                      >
-                        <EditIcon />
-                      </IconButton>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Facility</TableCell>
+                  <TableCell>Date</TableCell>
+                  <TableCell>Time</TableCell>
+                  <TableCell>Hours</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {sortedBookings.map((booking) => (
+                  <TableRow key={booking.id} hover>
+                    <TableCell>
+                      <Stack direction="row" spacing={1} alignItems="center">
+                        {getFacilityIcon(booking.facility)}
+                        <Typography fontWeight="bold">{booking.facility}</Typography>
+                      </Stack>
+                    </TableCell>
+                    <TableCell>{new Date(booking.booking_date).toLocaleDateString()}</TableCell>
+                    <TableCell>{new Date(booking.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</TableCell>
+                    <TableCell>{booking.hours}</TableCell>
+                    <TableCell>
+                      <Chip label={booking.status} color={getStatusColor(booking.status) as any} size="small" />
+                    </TableCell>
+                    <TableCell align="right">
                       <IconButton
                         size="small"
                         color="error"
@@ -383,12 +402,12 @@ export default function BookingsPage() {
                       >
                         <DeleteIcon />
                       </IconButton>
-                    </Stack>
-                  </CardContent>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Stack>
 
