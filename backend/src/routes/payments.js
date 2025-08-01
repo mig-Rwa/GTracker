@@ -102,7 +102,7 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
               console.error('User lookup failed for booking:', err || 'User not found');
               return;
             }
-            db.run('INSERT INTO bookings (user_id, facility, hours, booking_date) VALUES (?, ?, ?, ?)', [user.id, facility, hours, booking_date], function(err2) {
+            db.run('INSERT INTO bookings (user_id, facility, hours, booking_date, status) VALUES (?, ?, ?, ?, ?)', [user.id, facility, hours, booking_date, 'confirmed'], function(err2) {
               if (err2) {
                 console.error('Failed to create booking from Stripe webhook:', err2);
               } else {

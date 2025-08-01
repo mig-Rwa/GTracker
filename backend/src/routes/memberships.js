@@ -92,13 +92,39 @@ router.get('/', auth, (req, res) => {
 // Create Stripe Checkout Session for new membership
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 router.post('/', auth, async (req, res) => {
-  const { plan_key } = req.body;
+  const { plan_key, skipStripe } = req.body;
   if (!plan_key) {
     return res.status(400).json({ status: 'error', message: 'Missing plan_key' });
   }
   db.get('SELECT * FROM membership_plans WHERE plan_key = ? AND is_active = 1', [plan_key], async (err, plan) => {
     if (err) return res.status(500).json({ status: 'error', message: 'DB error', detail: err.message });
     if (!plan) return res.status(404).json({ status: 'error', message: 'Plan not found' });
+    
+    // Direct insert when skipStripe flag is true (e.g., localhost testing)
+    if (skipStripe || process.env.NODE_ENV === 'development') {
+      // calculate end date
+      const startDate = new Date();
+      const endDate = new Date(startDate);
+      if (plan.plan_key === '1week') endDate.setDate(endDate.getDate() + 7);
+      else if (plan.plan_key === '2weeks') endDate.setDate(endDate.getDate() + 14);
+      else if (plan.plan_key === '1month') endDate.setMonth(endDate.getMonth() + 1);
+      const startStr = startDate.toISOString().split('T')[0];
+      const endStr = endDate.toISOString().split('T')[0];
+      db.run(
+        `INSERT INTO memberships (user_id, plan_key, start_date, end_date, status, created_at) 
+         VALUES (?, ?, ?, ?, 'active', datetime('now'))`,
+        [req.user.id, plan.plan_key, startStr, endStr],
+        function(insertErr) {
+          if (insertErr) {
+            return res.status(500).json({ status: 'error', message: 'DB error', detail: insertErr.message });
+          }
+          res.json({ status: 'success', message: 'Membership activated (dev mode).' });
+        }
+      );
+      return;
+    }
+    
+    // Stripe flow for production
     try {
       const session = await stripe.checkout.sessions.create({
         payment_method_types: ['card'],

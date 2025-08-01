@@ -17,7 +17,7 @@ router.post('/', auth, (req, res) => {
   if (!facility || !hours || !booking_date) {
     return res.status(400).json({ status: 'error', message: 'Missing required fields' });
   }
-  db.run('INSERT INTO bookings (user_id, facility, hours, booking_date) VALUES (?, ?, ?, ?)', [req.user.id, facility, hours, booking_date], function(err) {
+  db.run('INSERT INTO bookings (user_id, facility, hours, booking_date, status) VALUES (?, ?, ?, ?, ?)', [req.user.id, facility, hours, booking_date, 'confirmed'], function(err) {
     if (err) return res.status(500).json({ status: 'error', message: 'DB error', detail: err.message });
     db.get('SELECT * FROM bookings WHERE id = ?', [this.lastID], (err2, row) => {
       if (err2) return res.status(500).json({ status: 'error', message: 'DB error', detail: err2.message });
