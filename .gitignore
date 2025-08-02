@@ -1,1 +1,25 @@
-"backend/.env" 
+# dependencies
+node_modules/
+.pnp.cjs
+.pnp.loader.mjs
+
+# Next.js build output
+.next/
+dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env / secrets
+.env*
+backend/.env
+
+# Local databases / dumps
+*.db
+
+# OS / editor junk
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

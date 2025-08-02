@@ -131,7 +131,8 @@ export default function BookingsPage() {
           headers: {
             'Content-Type': 'application/json',
             ...getAuthHeaders()
-          }
+          },
+          credentials: 'include'
         });
         const data = await response.json();
         
@@ -201,7 +202,8 @@ export default function BookingsPage() {
           headers: {
             'Content-Type': 'application/json',
             ...getAuthHeaders()
-          }
+          },
+          credentials: 'include'
         });
         const bookingsData = await bookingsResponse.json();
         setBookings(bookingsData.data || bookingsData);
@@ -248,7 +250,8 @@ export default function BookingsPage() {
           headers: {
             'Content-Type': 'application/json',
             ...getAuthHeaders()
-          }
+          },
+          credentials: 'include'
         });
         const bookingsData = await bookingsResponse.json();
         setBookings(bookingsData.data || bookingsData);

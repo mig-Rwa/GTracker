@@ -81,8 +81,9 @@ router.get('/', auth, (req, res) => {
     });
 });
 
-// Get a single workout (with exercises)
-router.get('/:id', auth, (req, res) => {
+// Get a single workout (with exercises) – restrict :id to numeric values so that
+// routes like /completed or /recent are not accidentally captured first.
+router.get('/:id(\\d+)', auth, (req, res) => {
     db.get('SELECT * FROM workouts WHERE id = ? AND user_id = ?', [req.params.id, req.user.id], (err, workout) => {
         if (err) {
             return res.status(500).json({

@@ -196,16 +196,20 @@ export default function SubscriptionsPage() {
         const response = await fetch('/api/memberships/plans');
         const result = await response.json();
         
-        if (response.ok && result.status === 'success') {
+        if (response.ok && (result.status === 'success' || result.data)) {
           console.log('Membership plans:', result.data);
           setMembershipPlans(result.data);
           if (result.data.length > 0) {
             setSelectedPlan(result.data[0].plan_key);
           }
-        } else {
+        } else if (!response.ok) {
           const errorMessage = result.message || 'Failed to fetch membership plans';
           console.error('API Error:', errorMessage);
           throw new Error(errorMessage);
+        } else {
+          // response ok but unknown format
+          console.warn('Unexpected membership plans response', result);
+          setMembershipPlans(result.data || []);
         }
       } catch (error) {
         console.error('Error fetching membership plans:', error);
@@ -329,13 +333,13 @@ export default function SubscriptionsPage() {
       if (response.ok) {
         if (data && data.url) {
           // Redirect to Stripe Checkout
-          window.location.href = data.url;
-          return; // further code will execute after redirect on success page
+          window.location.href = data.url; // Redirect to Stripe Checkout
+        } else {
+          // Fallback (dev mode or no url returned)
+          setSelectedPlan('');
+          await fetchMemberships();
+          setSnackbar({ open: true, message: 'Membership activated!', severity: 'success' });
         }
-        // Fallback (dev mode or no url returned)
-        setSelectedPlan('');
-        await fetchMemberships();
-        setSnackbar({ open: true, message: 'Membership activated!', severity: 'success' });
       } else {
         const errMsg = (data && (data.message || data.error)) || rawText || 'Failed to activate membership';
         throw new Error(errMsg);
