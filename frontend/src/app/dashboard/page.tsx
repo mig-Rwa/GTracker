@@ -115,6 +115,9 @@ export default function Page(): React.JSX.Element {
   const [recentWorkouts, setRecentWorkouts] = React.useState<any[]>([]);
   const [healthMetrics, setHealthMetrics] = React.useState<any[]>([]);
   const [workoutsPeriod, setWorkoutsPeriod] = React.useState<'week' | 'month' | 'year'>('week');
+  // Memberships & bookings
+  const [activeMemberships, setActiveMemberships] = React.useState<any[]>([]);
+  const [activeBookings, setActiveBookings] = React.useState<any[]>([]);
 
   // Pagination state for workouts and exercises
   const [workoutPage, setWorkoutPage] = React.useState(0);
@@ -193,8 +196,36 @@ export default function Page(): React.JSX.Element {
     fetchExercises(exercisePage);
   }, [fetchWorkouts, fetchExercises, workoutPage, exercisePage, workoutsPeriod, fetchWorkoutsCompleted]);
 
+  // Fetch memberships & bookings
+  const fetchMembershipsAndBookings = React.useCallback(() => {
+    fetch('/api/memberships', { headers: authHeaders(), credentials: 'include' })
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success') {
+          let list: any[] = [];
+          if (Array.isArray(json.data)) {
+            list = json.data;
+          } else if (json.data && json.data.current) {
+            list = json.data.current ? [json.data.current] : [];
+          }
+          const actives = list.filter((m: any) => m && m.status === 'active');
+          setActiveMemberships(actives);
+        }
+      });
+
+    fetch('/api/bookings', { headers: authHeaders(), credentials: 'include' })
+      .then(res => res.json())
+      .then(json => {
+        if (json.status === 'success') {
+          const actives = (json.data || []).filter((b: any) => b.status === 'confirmed' || b.status === 'active');
+          setActiveBookings(actives);
+        }
+      });
+  }, []);
+
   React.useEffect(() => {
     fetchDashboardData();
+    fetchMembershipsAndBookings();
   }, [fetchDashboardData]);
 
   // Refetch whenever period changes
@@ -245,9 +276,10 @@ export default function Page(): React.JSX.Element {
     },
   ];
 
-  // Prepare chart data for WorkoutTypeDistribution
-  const workoutTypeLabels = (workoutTypesData || []).map((w: any) => w.workout);
-  const workoutTypeSeries = (workoutTypesData || []).map((w: any) => w.count);
+  // Prepare chart data for WorkoutTypeDistribution – remove invalid rows to avoid null errors
+  const cleanedWorkoutTypes = (workoutTypesData || []).filter((w: any) => w && w.workout != null && w.count != null);
+  const workoutTypeLabels = cleanedWorkoutTypes.map((w: any) => String(w.workout));
+  const workoutTypeSeries = cleanedWorkoutTypes.map((w: any) => Number(w.count) || 0);
 
   // Get latest health metrics for display
   const latestMetrics = healthMetrics.length ? healthMetrics[healthMetrics.length - 1] : null;
@@ -277,7 +309,42 @@ export default function Page(): React.JSX.Element {
         <Grid size={{ lg: 6, xs: 12 }}>
           <TotalCustomers diff={16} trend="down" sx={{ height: '100%' }} value={String(workoutsValue)} />
         </Grid>
-        <Grid size={{ lg: 6, xs: 12 }} />
+        {/* Active Memberships Card */}
+        <Grid size={{ lg: 6, xs: 12 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardHeader title="Active Memberships" />
+            <CardContent>
+              {activeMemberships.length === 0 ? (
+                <Typography color="text.secondary" variant="body2">No active memberships</Typography>
+              ) : (
+                activeMemberships.map((m: any) => (
+                  <Box key={m.id} sx={{ mb: 1 }}>
+                    <Typography variant="subtitle1">{m.plan_name || m.plan_key}</Typography>
+                    <Typography color="text.secondary" variant="caption">Expires {dayjs(m.end_date).format('MMM D, YYYY')}</Typography>
+                  </Box>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
+        {/* Active Bookings Card */}
+        <Grid size={{ lg: 6, xs: 12 }}>
+          <Card sx={{ height: '100%' }}>
+            <CardHeader title="Active Bookings" />
+            <CardContent>
+              {activeBookings.length === 0 ? (
+                <Typography color="text.secondary" variant="body2">No active bookings</Typography>
+              ) : (
+                activeBookings.slice(0, 5).map((b: any) => (
+                  <Box key={b.id} sx={{ mb: 1 }}>
+                    <Typography variant="subtitle1">{b.facility}</Typography>
+                    <Typography color="text.secondary" variant="caption">{dayjs(b.booking_date).format('MMM D, YYYY')} – {b.hours}h</Typography>
+                  </Box>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
         <Grid size={{ lg: 12, xs: 12 }}>
           <CaloriesLostGraph />
         </Grid>
