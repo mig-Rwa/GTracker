@@ -221,45 +221,46 @@ export default function SubscriptionsPage() {
     
     fetchMembershipPlans();
   }, []);
-  
+
+  // API helpers
+  const fetchMemberships = async () => {
+    if (!user) return;
+    try {
+      const response = await fetch('/api/memberships', {
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+      });
+      const json = await response.json();
+      const payload = json.data || json; // backend wraps result under .data
+      if (response.ok) {
+        const active = payload.current && payload.current.status === 'active' ? payload.current : null;
+        setCurrentMembership(active);
+        setMembershipHistory(payload.history || []);
+        setHasActiveMembership(!!active);
+      } else if (response.status === 401) {
+        setCurrentMembership(null);
+        setMembershipHistory([]);
+        setHasActiveMembership(false);
+      } else {
+        throw new Error(payload.message || 'Failed to fetch memberships');
+      }
+    } catch (err) {
+      console.error('Error fetching memberships:', err);
+      setSnackbar({
+        open: true,
+        message: 'Failed to load memberships. Please try again later.',
+        severity: 'error',
+      });
+    }
+  };
+
   // Fetch user memberships
   useEffect(() => {
-    const fetchUserMemberships = async () => {
-      if (!user) return;
-      
-      try {
-        const response = await fetch('/api/memberships', { 
-          headers: {
-            'Content-Type': 'application/json',
-            ...getAuthHeaders()
-          }
-        });
-        const data = await response.json();
-        
-        if (response.ok) {
-          setCurrentMembership(data.current || null);
-          setMembershipHistory(data.history || []);
-          setHasActiveMembership(!!data.current);
-        } else if (response.status === 401) {
-          setCurrentMembership(null);
-          setMembershipHistory([]);
-          setHasActiveMembership(false);
-        } else {
-          throw new Error(data.message || 'Failed to fetch memberships');
-        }
-      } catch (error) {
-        console.error('Error fetching memberships:', error);
-        setSnackbar({
-          open: true,
-          message: 'Failed to load memberships. Please try again later.',
-          severity: 'error',
-        });
-      }
-    };
-    
-    fetchUserMemberships();
+    fetchMemberships();
   }, [user]);
-  
+
   // Fetch user bookings
   useEffect(() => {
     const fetchUserBookings = async () => {
@@ -288,7 +289,7 @@ export default function SubscriptionsPage() {
         // Only show snackbar if it wasn't an auth issue we purposely ignored
         setSnackbar({
           open: true,
-          message: 'Failed to load bookings. Please try again later.',
+          message: 'Failed to load bookings. Please try again.',
           severity: 'error',
         });
       } finally {
@@ -305,29 +306,75 @@ export default function SubscriptionsPage() {
     
     try {
       setActionLoading(true);
-      const response = await fetch('/api/subscribe', {
+      const body = { plan_key: selectedPlan };
+      const response = await fetch('/api/memberships', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...getAuthHeaders(),
         },
-        body: JSON.stringify({ plan_key: selectedPlan }),
+        body: JSON.stringify(body),
       });
-      
-      const data = await response.json();
-      
-      if (response.ok && data.url) {
-        // Redirect to Stripe Checkout
-        window.location.href = data.url;
+      // Robustly parse the response – backend may return an empty body on error
+      const rawText = await response.text();
+      let data: any = null;
+      try {
+        if (rawText) {
+          data = JSON.parse(rawText);
+        }
+      } catch (parseErr) {
+        // Non-JSON or malformed, keep data as null and log for debugging
+        console.warn('Non-JSON response from /api/memberships:', rawText);
+      }
+      if (response.ok) {
+        if (data && data.url) {
+          // Redirect to Stripe Checkout
+          window.location.href = data.url;
+          return; // further code will execute after redirect on success page
+        }
+        // Fallback (dev mode or no url returned)
+        setSelectedPlan('');
+        await fetchMemberships();
+        setSnackbar({ open: true, message: 'Membership activated!', severity: 'success' });
       } else {
-        throw new Error(data.message || 'Failed to initiate subscription');
+        const errMsg = (data && (data.message || data.error)) || rawText || 'Failed to activate membership';
+        throw new Error(errMsg);
       }
     } catch (error) {
       console.error('Error subscribing:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to process subscription. Please try again.',
-        severity: 'error',
+      setSnackbar({ open: true, message: error instanceof Error ? error.message : 'Failed to process membership.', severity: 'error' });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Cancel current membership
+  const handleCancelMembership = async () => {
+    try {
+      setActionLoading(true);
+      const response = await fetch('/api/memberships', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
       });
+      const rawText = await response.text();
+      let data: any = null;
+      try {
+        if (rawText) data = JSON.parse(rawText);
+      } catch (e) {
+        console.warn('Non-JSON response:', rawText);
+      }
+      if (response.ok) {
+        await fetchMemberships();
+        setSnackbar({ open: true, message: 'Membership cancelled.', severity: 'success' });
+      } else {
+        throw new Error((data && data.message) || rawText || 'Failed to cancel membership');
+      }
+    } catch (error) {
+      console.error('Error cancelling membership:', error);
+      setSnackbar({ open: true, message: 'Unable to cancel membership. Please try again.', severity: 'error' });
     } finally {
       setActionLoading(false);
     }
@@ -598,23 +645,24 @@ export default function SubscriptionsPage() {
                         <Typography variant="body1">
                           <strong>Days Remaining:</strong> {currentMembership.days_remaining}
                         </Typography>
-                        <Button 
-                          variant="contained" 
-                          color="primary" 
-                          sx={{ mt: 2 }}
-                          onClick={handleSubscribe}
-                          disabled={actionLoading}
-                        >
-                          {actionLoading ? 'Processing...' : 'Renew Membership'}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          color="secondary"
-                          sx={{ mt: 2, ml: 2 }}
-                          onClick={() => router.push('/memberships')}
-                        >
-                          Past Memberships
-                        </Button>
+                        <Box display="flex" justifyContent="flex-end" sx={{ mt: 2 }}>
+                          <Button
+                            variant="contained"
+                            color="error"
+                            onClick={handleCancelMembership}
+                            disabled={actionLoading}
+                          >
+                            {actionLoading ? 'Processing...' : 'Cancel Membership'}
+                          </Button>
+                          <Button
+                            variant="outlined"
+                            color="secondary"
+                            sx={{ ml: 2 }}
+                            onClick={() => router.push('/memberships')}
+                          >
+                            Past Memberships
+                          </Button>
+                        </Box>
                       </Grid>
                     </Grid>
                   </Box>
@@ -644,7 +692,7 @@ export default function SubscriptionsPage() {
               </Paper>
               
               {/* Membership Plans */}
-              <Box sx={{ mb: 4, width: '100%' }}>
+              <Box sx={{ mb: 4, width: '100%', position: 'relative', opacity: hasActiveMembership ? 0.4 : 1, pointerEvents: hasActiveMembership ? 'none' : 'auto' }}>
                 <Typography variant="h6" component="h2" sx={{ mb: 3, fontWeight: 'bold' }}>
                   Membership Plans
                 </Typography>
@@ -796,7 +844,7 @@ export default function SubscriptionsPage() {
                       color="primary"
                       size="large"
                       onClick={handleSubscribe}
-                      disabled={!selectedPlan || actionLoading || plansLoading}
+                      disabled={hasActiveMembership || !selectedPlan || actionLoading || plansLoading}
                       startIcon={actionLoading ? <CircularProgress size={24} color="inherit" /> : null}
                       sx={{
                         py: 1.5,
@@ -816,6 +864,12 @@ export default function SubscriptionsPage() {
                         Cancel anytime. No hidden fees.
                       </Typography>
                     </Box>
+                    
+                    {hasActiveMembership && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 2 }}>
+                        You already have an active membership. Manage it above.
+                      </Typography>
+                    )}
                   </Box>
                 )}
               </Box>

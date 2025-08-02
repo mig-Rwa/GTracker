@@ -35,7 +35,8 @@ function CaloriesLostGraph() {
       const res = await fetch(`/api/progress/calories-burned?period=${period}`, {
         headers: {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        }
+        },
+        credentials: 'include'
       });
       const json = await res.json();
       if (json.status === 'success') {
@@ -113,6 +114,7 @@ export default function Page(): React.JSX.Element {
   const [recentExercises, setRecentExercises] = React.useState<any[]>([]);
   const [recentWorkouts, setRecentWorkouts] = React.useState<any[]>([]);
   const [healthMetrics, setHealthMetrics] = React.useState<any[]>([]);
+  const [workoutsPeriod, setWorkoutsPeriod] = React.useState<'week' | 'month' | 'year'>('week');
 
   // Pagination state for workouts and exercises
   const [workoutPage, setWorkoutPage] = React.useState(0);
@@ -120,6 +122,12 @@ export default function Page(): React.JSX.Element {
   const [exercisePage, setExercisePage] = React.useState(0);
   const [exerciseTotal, setExerciseTotal] = React.useState(0);
   const rowsPerPage = 5;
+
+  // Helper to build Authorization header once
+  const authHeaders = () => {
+    const token = localStorage.getItem('custom-auth-token');
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+  };
 
   // Fetch paginated workouts
   const fetchWorkouts = React.useCallback((page = 0) => {
@@ -141,47 +149,58 @@ export default function Page(): React.JSX.Element {
       });
   }, []);
 
+  // Fetch workouts completed for selected period
+  const fetchWorkoutsCompleted = React.useCallback((period: 'week' | 'month' | 'year') => {
+    fetch(`/api/workouts/completed?period=${period}`, { headers: authHeaders(), credentials: 'include' })
+      .then(res => res.json())
+      .then(json => setWorkouts(json.count));
+  }, []);
+
   // Fetch all other dashboard data
   const fetchDashboardData = React.useCallback(() => {
     // Calories Consumed
-    fetch('/api/food/total-calories?period=week')
+    fetch('/api/food/total-calories?period=week', { headers: authHeaders(), credentials: 'include' })
       .then(res => res.json())
       .then(json => setCalories(json.total));
     // Workouts Completed
-    fetch('/api/workouts/completed?period=week')
-      .then(res => res.json())
-      .then(json => setWorkouts(json.count));
+    fetchWorkoutsCompleted(workoutsPeriod);
     // Weekly Goal Progress
-    fetch('/api/progress/weekly-goal')
+    fetch('/api/progress/weekly-goal', { headers: authHeaders(), credentials: 'include' })
       .then(res => res.json())
       .then(json => setGoalProgress(json.percent));
     // Active Days
-    fetch('/api/progress/active-days?period=week')
+    fetch('/api/progress/active-days?period=week', { headers: authHeaders(), credentials: 'include' })
       .then(res => res.json())
       .then(json => setActiveDays(json.count));
     // Calories Burned Over Time
-    fetch('/api/progress/calories-burned')
+    fetch('/api/progress/calories-burned', { headers: authHeaders(), credentials: 'include' })
       .then(res => res.json())
       .then(json => setCaloriesChart(json.data));
     // Workout Type Distribution
-    fetch('/api/progress/workout-types')
+    fetch('/api/progress/workout-types', { headers: authHeaders(), credentials: 'include' })
       .then(res => res.json())
       .then(json => setWorkoutTypes(json.data));
     // Fetch weekly health metrics
     const token = localStorage.getItem('custom-auth-token');
     fetch('/api/health-metrics/weekly', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: 'include'
     })
       .then(res => res.json())
       .then(json => setHealthMetrics(json.data || []));
     // Paginated lists
     fetchWorkouts(workoutPage);
     fetchExercises(exercisePage);
-  }, [fetchWorkouts, fetchExercises, workoutPage, exercisePage]);
+  }, [fetchWorkouts, fetchExercises, workoutPage, exercisePage, workoutsPeriod, fetchWorkoutsCompleted]);
 
   React.useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Refetch whenever period changes
+  React.useEffect(() => {
+    fetchWorkoutsCompleted(workoutsPeriod);
+  }, [workoutsPeriod, fetchWorkoutsCompleted]);
 
   // Pagination handlers
   const handleNextWorkouts = () => setWorkoutPage(p => p + 1);
@@ -238,10 +257,18 @@ export default function Page(): React.JSX.Element {
       <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
         <img src="/images/gtracker-logo.JPG" alt="GTracker logo" height={96} style={{ marginLeft: 8, maxWidth: '100%', objectFit: 'contain' }} />
       </Box>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <button onClick={fetchDashboardData} style={{ padding: '8px 16px', borderRadius: 4, background: '#7b61ff', color: '#fff', border: 'none', cursor: 'pointer' }}>
-          Refresh
-        </button>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div />
+        <div style={{ display: 'flex', gap: 12 }}>
+          <Select size="small" value={workoutsPeriod} onChange={e => setWorkoutsPeriod(e.target.value as 'week' | 'month' | 'year')}> 
+            <MenuItem value="week">Week</MenuItem>
+            <MenuItem value="month">Month</MenuItem>
+            <MenuItem value="year">Year</MenuItem>
+          </Select>
+          <button onClick={fetchDashboardData} style={{ padding: '8px 16px', borderRadius: 4, background: '#7b61ff', color: '#fff', border: 'none', cursor: 'pointer' }}>
+            Refresh
+          </button>
+        </div>
       </div>
       <Grid container spacing={3}>
         <Grid size={{ lg: 6, xs: 12 }}>

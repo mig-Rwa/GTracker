@@ -282,7 +282,7 @@ router.delete('/:id', auth, (req, res) => {
     });
 });
 
-// Get count of completed workouts for a period (day, week, month) - only workouts with at least one exercise
+// Get count of completed workouts for a period (day, week, month, year) - only workouts with at least one exercise
 router.get('/completed', auth, (req, res) => {
   const { period = 'day' } = req.query;
   const userId = req.user.id;
@@ -293,6 +293,8 @@ router.get('/completed', auth, (req, res) => {
     dateCondition = `w.date >= date('now', '-6 days', 'localtime')`;
   } else if (period === 'month') {
     dateCondition = `w.date >= date('now', 'start of month', 'localtime')`;
+  } else if (period === 'year') {
+    dateCondition = `w.date >= date('now', 'start of year', 'localtime')`;
   } else {
     return res.status(400).json({ status: 'error', message: 'Invalid period' });
   }
