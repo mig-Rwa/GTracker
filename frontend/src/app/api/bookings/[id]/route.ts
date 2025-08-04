@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4100';
 
 export async function PUT(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
@@ -39,7 +39,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
