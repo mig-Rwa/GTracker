@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+// No imports needed — use the Web Fetch API types (Request/Response)
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4100';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4100';
 
 export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Record<string, string> }
 ) {
   const body = await request.json();
 
@@ -20,17 +21,18 @@ export async function PUT(
   });
 
   const text = await upstream.text();
-  return new NextResponse(text, {
+  return new Response(text, {
     status: upstream.status,
     headers: {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json',
+      'content-type':
+        upstream.headers.get('content-type') ?? 'application/json',
     },
   });
 }
 
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
+  request: Request,
+  { params }: { params: Record<string, string> }
 ) {
   const upstream = await fetch(`${API_BASE_URL}/api/bookings/${params.id}`, {
     method: 'DELETE',
@@ -43,10 +45,11 @@ export async function DELETE(
   });
 
   const text = await upstream.text();
-  return new NextResponse(text, {
+  return new Response(text, {
     status: upstream.status,
     headers: {
-      'content-type': upstream.headers.get('content-type') ?? 'application/json',
+      'content-type':
+        upstream.headers.get('content-type') ?? 'application/json',
     },
   });
 }
