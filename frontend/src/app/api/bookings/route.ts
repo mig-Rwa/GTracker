@@ -1,16 +1,30 @@
-// No imports needed — use the Web Fetch API types (Request/Response)
+// /api/bookings  (non-dynamic)
+// No imports needed — use Web Fetch API types
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4100';
 
-export async function PUT(
-  request: Request,
-  { params }: { params: Record<string, string> }
-) {
+export async function GET(_request: Request) {
+  const upstream = await fetch(`${API_BASE_URL}/api/bookings`, {
+    method: 'GET',
+    headers: { 'content-type': 'application/json' },
+    cache: 'no-store',
+  });
+
+  const text = await upstream.text();
+  return new Response(text, {
+    status: upstream.status,
+    headers: {
+      'content-type': upstream.headers.get('content-type') ?? 'application/json',
+    },
+  });
+}
+
+export async function POST(request: Request) {
   const body = await request.json();
 
-  const upstream = await fetch(`${API_BASE_URL}/api/bookings/${params.id}`, {
-    method: 'PUT',
+  const upstream = await fetch(`${API_BASE_URL}/api/bookings`, {
+    method: 'POST',
     headers: {
       'content-type': 'application/json',
       cookie: request.headers.get('cookie') || '',
@@ -24,32 +38,7 @@ export async function PUT(
   return new Response(text, {
     status: upstream.status,
     headers: {
-      'content-type':
-        upstream.headers.get('content-type') ?? 'application/json',
-    },
-  });
-}
-
-export async function DELETE(
-  request: Request,
-  { params }: { params: Record<string, string> }
-) {
-  const upstream = await fetch(`${API_BASE_URL}/api/bookings/${params.id}`, {
-    method: 'DELETE',
-    headers: {
-      'content-type': 'application/json',
-      cookie: request.headers.get('cookie') || '',
-      authorization: request.headers.get('authorization') || '',
-    },
-    credentials: 'include',
-  });
-
-  const text = await upstream.text();
-  return new Response(text, {
-    status: upstream.status,
-    headers: {
-      'content-type':
-        upstream.headers.get('content-type') ?? 'application/json',
+      'content-type': upstream.headers.get('content-type') ?? 'application/json',
     },
   });
 }
